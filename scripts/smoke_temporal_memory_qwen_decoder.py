@@ -246,8 +246,12 @@ def main() -> int:
             use_cache=False,
             return_dict=True,
         )
-        base_prompt_hidden = base_prompt_output.last_hidden_state[:, -1].detach()
-    del base_prompt_output
+        base_prompt_hidden_inference = base_prompt_output.last_hidden_state[:, -1].detach()
+    # Tensors created inside inference_mode carry an inference-only flag even
+    # when detached. A trainable adapter must be allowed to save this constant
+    # input for its weight gradients, so clone it after leaving inference mode.
+    base_prompt_hidden = base_prompt_hidden_inference.clone()
+    del base_prompt_output, base_prompt_hidden_inference
 
     def build_decoder_memory(clip_tokens, questions, shuffle_memory: bool, zero_memory: bool):
         memory_outputs = memory_model(clip_tokens, questions, shuffle_memory=shuffle_memory)
