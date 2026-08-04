@@ -111,6 +111,15 @@ def main() -> int:
         args.model_path,
         local_files_only=not args.allow_download,
     )
+    chat_template_path = repo_root / "chat_template.json"
+    with chat_template_path.open("r", encoding="utf-8") as handle:
+        future_l1_chat_template = json.load(handle)["chat_template"]
+    # The base Qwen3-VL template may omit assistant-side images. Future-L1's
+    # template deliberately renders images for every role so those placeholders
+    # can be rewritten into latent spans by the collator.
+    processor.chat_template = future_l1_chat_template
+    processor.tokenizer.chat_template = future_l1_chat_template
+    print(f"PASS Future-L1 chat template loaded from {chat_template_path}")
     processor.tokenizer.add_tokens(
         ["<|latent|>", "<|latent_start|>", "<|latent_end|>"],
         special_tokens=False,
@@ -143,6 +152,20 @@ def main() -> int:
         return 1
     if "pixel_values_latent" not in batch:
         print("FAIL missing pixel_values_latent; sample may not contain a future visual hint", file=sys.stderr)
+        return 1
+    latent_id = processor.tokenizer.convert_tokens_to_ids("<|latent|>")
+    latent_count = int((batch["input_ids"] == latent_id).sum().item())
+    image_out_count = int(batch.get("image_out_mask", batch["input_ids"].new_zeros(1)).sum().item())
+    print(f"latent_token_id={latent_id} latent_token_count={latent_count}")
+    print(f"image_out_mask_count={image_out_count}")
+    if latent_count <= 0:
+        print("FAIL no latent tokens in collated input_ids", file=sys.stderr)
+        return 1
+    if image_out_count != latent_count:
+        print(
+            f"FAIL image_out_mask count {image_out_count} != latent token count {latent_count}",
+            file=sys.stderr,
+        )
         return 1
     print("OVERALL PASS")
     return 0

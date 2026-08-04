@@ -9,6 +9,7 @@ data. Remote checkpoint access is disabled unless --allow-download is passed.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import sys
@@ -88,6 +89,12 @@ def main() -> int:
     device = torch.device(args.device)
     dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
     processor = AutoProcessor.from_pretrained(args.model_path, local_files_only=local_only)
+    chat_template_path = repo_root / "chat_template.json"
+    with chat_template_path.open("r", encoding="utf-8") as handle:
+        future_l1_chat_template = json.load(handle)["chat_template"]
+    processor.chat_template = future_l1_chat_template
+    processor.tokenizer.chat_template = future_l1_chat_template
+    print(f"using Future-L1 chat template from {chat_template_path}")
     processor.tokenizer.add_tokens(
         ["<|latent|>", "<|latent_start|>", "<|latent_end|>"],
         special_tokens=False,
@@ -144,6 +151,16 @@ def main() -> int:
         for key, value in batch.items()
         if value is not None
     }
+
+    latent_count = int((batch["input_ids"] == config.latent_id).sum().item())
+    latent_mask_count = int(batch["image_out_mask"].sum().item())
+    print(
+        f"latent_id={config.latent_id} latent_tokens={latent_count} "
+        f"image_out_mask={latent_mask_count}"
+    )
+    if latent_count <= 0 or latent_mask_count != latent_count:
+        print("FAIL collated latent token/mask alignment", file=sys.stderr)
+        return 1
 
     with torch.set_grad_enabled(args.backward):
         outputs = model(**batch)
