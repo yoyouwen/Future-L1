@@ -22,9 +22,10 @@ from pathlib import Path
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", required=True)
-    parser.add_argument("--memory-warmup-steps", type=int, default=300)
-    parser.add_argument("--decoder-steps", type=int, default=150)
-    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--memory-warmup-steps", type=int, default=500)
+    parser.add_argument("--memory-warmup-batch-size", type=int, default=32)
+    parser.add_argument("--decoder-steps", type=int, default=300)
+    parser.add_argument("--decoder-batch-size", type=int, default=8)
     parser.add_argument("--eval-samples", type=int, default=512)
     parser.add_argument("--eval-batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=0)
@@ -48,8 +49,9 @@ def main() -> int:
 
     numeric_args = (
         args.memory_warmup_steps,
+        args.memory_warmup_batch_size,
         args.decoder_steps,
-        args.batch_size,
+        args.decoder_batch_size,
         args.eval_samples,
         args.eval_batch_size,
     )
@@ -173,7 +175,7 @@ def main() -> int:
     memory_model.train()
     warmup_loss = None
     for _ in range(args.memory_warmup_steps):
-        clip_tokens, questions, labels = make_batch(args.batch_size, warmup_generator)
+        clip_tokens, questions, labels = make_batch(args.memory_warmup_batch_size, warmup_generator)
         warmup_loss_tensor = F.cross_entropy(memory_model(clip_tokens, questions)["logits"], labels)
         warmup_optimizer.zero_grad(set_to_none=True)
         warmup_loss_tensor.backward()
@@ -182,6 +184,20 @@ def main() -> int:
         warmup_loss = float(warmup_loss_tensor.detach())
     del warmup_optimizer
 
+    # Do not spend time backpropagating through the frozen 8B decoder unless
+    # the temporal mechanism has first learned the controlled visual task.
+    warmup_eval_generator = torch.Generator().manual_seed(args.seed + 9_000)
+    warmup_eval_tokens, warmup_eval_questions, warmup_eval_labels = make_batch(512, warmup_eval_generator)
+    memory_model.eval()
+    with torch.inference_mode():
+        warmup_prediction = memory_model(warmup_eval_tokens, warmup_eval_questions)["logits"].argmax(-1)
+        warmup_accuracy = float((warmup_prediction == warmup_eval_labels).float().mean())
+    del warmup_eval_tokens, warmup_eval_questions, warmup_eval_labels, warmup_prediction
+    print(f"PASS memory_warmup loss={warmup_loss:.6f} heldout_accuracy={warmup_accuracy:.4f}")
+    if warmup_accuracy < 0.60:
+        print("OVERALL FAIL: memory warmup did not learn; decoder stage skipped")
+        return 1
+
     memory_bridge = nn.Sequential(nn.LayerNorm(memory_dim), nn.Linear(memory_dim, qwen_dim)).to(device)
     nn.init.normal_(memory_bridge[1].weight, mean=0.0, std=0.02)
     nn.init.zeros_(memory_bridge[1].bias)
@@ -189,12 +205,17 @@ def main() -> int:
     candidate_lm_weights = model.lm_head.weight.index_select(0, answer_token_ids).detach()
 
     def decoder_logits(clip_tokens, questions, shuffle_memory: bool = False, zero_memory: bool = False):
-        memory = memory_model(
+        memory_outputs = memory_model(
             clip_tokens,
             questions,
             shuffle_memory=shuffle_memory,
-        )["memory"]
-        prefix = memory_bridge(memory)
+        )
+        memory = memory_outputs["memory"]
+        # Preserve the 16-token budget but expose the warmup-trained,
+        # question-conditioned read result in the first decoder prefix slot.
+        retrieved = torch.einsum("bl,bld->bd", memory_outputs["read_attention"], memory)
+        decoder_memory = torch.cat((retrieved.unsqueeze(1), memory[:, 1:]), dim=1)
+        prefix = memory_bridge(decoder_memory)
         if zero_memory:
             prefix = torch.zeros_like(prefix)
         prefix = prefix.to(decoder_prompt_embeddings.dtype)
@@ -219,8 +240,10 @@ def main() -> int:
 
     # The 8B decoder is frozen, but gradients flow through it into the continuous prefix.
     decoder_optimizer = torch.optim.AdamW(
-        list(memory_model.parameters()) + list(memory_bridge.parameters()),
-        lr=2e-4,
+        [
+            {"params": list(memory_model.parameters()), "lr": 5e-5},
+            {"params": list(memory_bridge.parameters()), "lr": 1e-3},
+        ],
         weight_decay=1e-3,
     )
     decoder_generator = torch.Generator().manual_seed(args.seed + 200)
@@ -228,7 +251,7 @@ def main() -> int:
     memory_model.train()
     memory_bridge.train()
     for step in range(args.decoder_steps):
-        clip_tokens, questions, labels = make_batch(args.batch_size, decoder_generator)
+        clip_tokens, questions, labels = make_batch(args.decoder_batch_size, decoder_generator)
         loss_tensor = F.cross_entropy(decoder_logits(clip_tokens, questions), labels)
         decoder_optimizer.zero_grad(set_to_none=True)
         loss_tensor.backward()
@@ -273,6 +296,7 @@ def main() -> int:
     result = {
         "decoder": "frozen_qwen3_vl_lm_head_abcd",
         "memory_warmup_steps": args.memory_warmup_steps,
+        "memory_warmup_accuracy": round(warmup_accuracy, 4),
         "decoder_steps": args.decoder_steps,
         "global_memory_tokens": num_clips * slots_per_clip,
         "warmup_final_loss": round(warmup_loss, 6),
