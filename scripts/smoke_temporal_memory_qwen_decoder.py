@@ -119,7 +119,9 @@ def main() -> int:
     if answer_token_ids.unique().numel() != 4:
         raise RuntimeError(f"answer token ids are not unique: {answer_token_ids.tolist()}")
 
-    with torch.inference_mode():
+    # These frozen outputs later feed trainable components. no_grad avoids an
+    # unnecessary graph without giving them inference-only tensor semantics.
+    with torch.no_grad():
         image_features, _ = model.model.get_image_features(pixel_values, image_grid_thw)
         if len({tuple(features.shape) for features in image_features}) != 1:
             raise RuntimeError("prototype images produced inconsistent visual-token shapes")
@@ -235,7 +237,9 @@ def main() -> int:
 
     # Cache the frozen decoder's question representation. Cross-attention mode
     # trains only an explicit memory-read adapter on top of this state.
-    with torch.inference_mode():
+    # no_grad is required because adapter layers later save this constant input
+    # while computing their own weight gradients.
+    with torch.no_grad():
         base_prompt_attention = torch.ones_like(decoder_prompt_ids)
         base_prompt_positions = torch.arange(decoder_prompt_ids.shape[1], device=device).unsqueeze(0)
         base_prompt_output = decoder(
@@ -246,12 +250,8 @@ def main() -> int:
             use_cache=False,
             return_dict=True,
         )
-        base_prompt_hidden_inference = base_prompt_output.last_hidden_state[:, -1].detach()
-    # Tensors created inside inference_mode carry an inference-only flag even
-    # when detached. A trainable adapter must be allowed to save this constant
-    # input for its weight gradients, so clone it after leaving inference mode.
-    base_prompt_hidden = base_prompt_hidden_inference.clone()
-    del base_prompt_output, base_prompt_hidden_inference
+        base_prompt_hidden = base_prompt_output.last_hidden_state[:, -1].detach()
+    del base_prompt_output
 
     def build_decoder_memory(clip_tokens, questions, shuffle_memory: bool, zero_memory: bool):
         memory_outputs = memory_model(clip_tokens, questions, shuffle_memory=shuffle_memory)
