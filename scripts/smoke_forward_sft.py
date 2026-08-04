@@ -97,17 +97,25 @@ def main() -> int:
     config.latent_end_id = processor.tokenizer.convert_tokens_to_ids("<|latent_end|>")
 
     print(f"loading model_type={config.model_type} dtype={dtype} device={device}")
-    model = model_cls.from_pretrained(
-        args.model_path,
-        config=config,
-        torch_dtype=dtype,
-        attn_implementation="sdpa",
-        local_files_only=local_only,
-        low_cpu_mem_usage=True,
-    )
+    load_kwargs = {
+        "config": config,
+        "dtype": dtype,
+        "attn_implementation": "sdpa",
+        "local_files_only": local_only,
+        "low_cpu_mem_usage": True,
+    }
+    if device.type == "cuda":
+        # Load each safetensors shard directly onto the single target GPU.
+        # Loading onto CPU first and then calling model.to(cuda) can trigger
+        # many delayed mmap page faults when checkpoints live on RunPod's
+        # network volume, making the process appear hung in folio_wait_bit.
+        load_kwargs["device_map"] = {"": str(device)}
+
+    model = model_cls.from_pretrained(args.model_path, **load_kwargs)
     if model.get_input_embeddings().num_embeddings < len(processor.tokenizer):
         model.resize_token_embeddings(len(processor.tokenizer))
-    model.to(device)
+    if device.type != "cuda":
+        model.to(device)
     # Match scripts/train_twiff.sh: keep the shared vision teacher and merger
     # frozen while allowing the language model to receive gradients.
     vision_tower = get_vision_tower(model)
