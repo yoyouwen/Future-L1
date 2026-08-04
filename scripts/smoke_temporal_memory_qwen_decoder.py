@@ -26,6 +26,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--memory-warmup-batch-size", type=int, default=32)
     parser.add_argument("--decoder-steps", type=int, default=300)
     parser.add_argument("--decoder-batch-size", type=int, default=8)
+    parser.add_argument(
+        "--injection-mode",
+        choices=("cross_attention", "prefix"),
+        default="cross_attention",
+    )
     parser.add_argument("--eval-samples", type=int, default=512)
     parser.add_argument("--eval-batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=0)
@@ -198,26 +203,64 @@ def main() -> int:
         print("OVERALL FAIL: memory warmup did not learn; decoder stage skipped")
         return 1
 
-    memory_bridge = nn.Sequential(nn.LayerNorm(memory_dim), nn.Linear(memory_dim, qwen_dim)).to(device)
-    nn.init.normal_(memory_bridge[1].weight, mean=0.0, std=0.02)
-    nn.init.zeros_(memory_bridge[1].bias)
     decoder = model.model.language_model
     candidate_lm_weights = model.lm_head.weight.index_select(0, answer_token_ids).detach()
 
-    def decoder_logits(clip_tokens, questions, shuffle_memory: bool = False, zero_memory: bool = False):
-        memory_outputs = memory_model(
-            clip_tokens,
-            questions,
-            shuffle_memory=shuffle_memory,
+    memory_bridge = nn.Sequential(nn.LayerNorm(memory_dim), nn.Linear(memory_dim, qwen_dim)).to(device)
+    nn.init.normal_(memory_bridge[1].weight, mean=0.0, std=0.02)
+    nn.init.zeros_(memory_bridge[1].bias)
+
+    class DecoderMemoryCrossAttention(nn.Module):
+        """Small explicit read interface between frozen Qwen and latent memory."""
+
+        def __init__(self, decoder_dim: int, latent_dim: int, adapter_dim: int = 256):
+            super().__init__()
+            self.query_norm = nn.LayerNorm(decoder_dim)
+            self.memory_norm = nn.LayerNorm(latent_dim)
+            self.query_projection = nn.Linear(decoder_dim, adapter_dim)
+            self.memory_projection = nn.Linear(latent_dim, adapter_dim)
+            self.attention = nn.MultiheadAttention(adapter_dim, 4, batch_first=True)
+            self.output_projection = nn.Linear(adapter_dim, decoder_dim)
+            self.output_gate = nn.Parameter(torch.tensor(0.1))
+
+        def forward(self, decoder_hidden, latent_memory):
+            query = self.query_projection(self.query_norm(decoder_hidden)).unsqueeze(1)
+            keys = self.memory_projection(self.memory_norm(latent_memory))
+            retrieved, attention = self.attention(query, keys, keys, need_weights=True)
+            delta = self.output_projection(retrieved.squeeze(1))
+            fused = decoder_hidden.float() + self.output_gate.tanh() * delta
+            return fused, attention.squeeze(1)
+
+    cross_attention_adapter = DecoderMemoryCrossAttention(qwen_dim, memory_dim).to(device)
+
+    # Cache the frozen decoder's question representation. Cross-attention mode
+    # trains only an explicit memory-read adapter on top of this state.
+    with torch.inference_mode():
+        base_prompt_attention = torch.ones_like(decoder_prompt_ids)
+        base_prompt_positions = torch.arange(decoder_prompt_ids.shape[1], device=device).unsqueeze(0)
+        base_prompt_output = decoder(
+            input_ids=None,
+            inputs_embeds=decoder_prompt_embeddings,
+            attention_mask=base_prompt_attention,
+            position_ids=base_prompt_positions,
+            use_cache=False,
+            return_dict=True,
         )
+        base_prompt_hidden = base_prompt_output.last_hidden_state[:, -1].detach()
+    del base_prompt_output
+
+    def build_decoder_memory(clip_tokens, questions, shuffle_memory: bool, zero_memory: bool):
+        memory_outputs = memory_model(clip_tokens, questions, shuffle_memory=shuffle_memory)
         memory = memory_outputs["memory"]
-        # Preserve the 16-token budget but expose the warmup-trained,
-        # question-conditioned read result in the first decoder prefix slot.
         retrieved = torch.einsum("bl,bld->bd", memory_outputs["read_attention"], memory)
         decoder_memory = torch.cat((retrieved.unsqueeze(1), memory[:, 1:]), dim=1)
-        prefix = memory_bridge(decoder_memory)
         if zero_memory:
-            prefix = torch.zeros_like(prefix)
+            decoder_memory = torch.zeros_like(decoder_memory)
+        return decoder_memory
+
+    def prefix_logits(clip_tokens, questions, shuffle_memory: bool = False, zero_memory: bool = False):
+        decoder_memory = build_decoder_memory(clip_tokens, questions, shuffle_memory, zero_memory)
+        prefix = memory_bridge(decoder_memory)
         prefix = prefix.to(decoder_prompt_embeddings.dtype)
         prompt = decoder_prompt_embeddings.expand(prefix.shape[0], -1, -1)
         inputs_embeds = torch.cat((prefix, prompt), dim=1)
@@ -238,11 +281,25 @@ def main() -> int:
         final_hidden = outputs.last_hidden_state[:, -1]
         return F.linear(final_hidden, candidate_lm_weights).float()
 
-    # The 8B decoder is frozen, but gradients flow through it into the continuous prefix.
+    def cross_attention_logits(clip_tokens, questions, shuffle_memory: bool = False, zero_memory: bool = False):
+        decoder_memory = build_decoder_memory(clip_tokens, questions, shuffle_memory, zero_memory)
+        prompt_hidden = base_prompt_hidden.expand(decoder_memory.shape[0], -1)
+        fused_hidden, _ = cross_attention_adapter(prompt_hidden, decoder_memory)
+        return F.linear(fused_hidden.to(candidate_lm_weights.dtype), candidate_lm_weights).float()
+
+    decoder_logits = prefix_logits if args.injection_mode == "prefix" else cross_attention_logits
+
+    if args.injection_mode == "prefix":
+        injection_parameters = list(memory_bridge.parameters())
+    else:
+        injection_parameters = list(cross_attention_adapter.parameters())
+
+    # Prefix mode differentiates through the frozen decoder. Cross-attention
+    # mode uses its cached question state and an explicit trainable memory read.
     decoder_optimizer = torch.optim.AdamW(
         [
             {"params": list(memory_model.parameters()), "lr": 5e-5},
-            {"params": list(memory_bridge.parameters()), "lr": 1e-3},
+            {"params": injection_parameters, "lr": 1e-3},
         ],
         weight_decay=1e-3,
     )
@@ -250,13 +307,14 @@ def main() -> int:
     decoder_loss = None
     memory_model.train()
     memory_bridge.train()
+    cross_attention_adapter.train()
     for step in range(args.decoder_steps):
         clip_tokens, questions, labels = make_batch(args.decoder_batch_size, decoder_generator)
         loss_tensor = F.cross_entropy(decoder_logits(clip_tokens, questions), labels)
         decoder_optimizer.zero_grad(set_to_none=True)
         loss_tensor.backward()
         torch.nn.utils.clip_grad_norm_(
-            list(memory_model.parameters()) + list(memory_bridge.parameters()),
+            list(memory_model.parameters()) + injection_parameters,
             1.0,
         )
         decoder_optimizer.step()
@@ -266,6 +324,7 @@ def main() -> int:
 
     memory_model.eval()
     memory_bridge.eval()
+    cross_attention_adapter.eval()
     eval_generator = torch.Generator().manual_seed(args.seed + 10_000)
     eval_tokens, eval_questions, eval_labels = make_batch(args.eval_samples, eval_generator)
 
@@ -295,6 +354,7 @@ def main() -> int:
 
     result = {
         "decoder": "frozen_qwen3_vl_lm_head_abcd",
+        "injection_mode": args.injection_mode,
         "memory_warmup_steps": args.memory_warmup_steps,
         "memory_warmup_accuracy": round(warmup_accuracy, 4),
         "decoder_steps": args.decoder_steps,
