@@ -1,0 +1,503 @@
+Future-L1 latent path source map
+repo_root=/Users/youwenzhu/code/HyLar/Future-L1
+git_commit=a91add2acc95bd0bdd609219da43df0af6e979db
+
+## SFT latent tokens, targets, injection, recursion, and losses
+scripts/smoke_dataset_sft.py:115:        ["<|latent|>", "<|latent_start|>", "<|latent_end|>"],
+scripts/smoke_dataset_sft.py:144:    if "pixel_values_latent" not in batch:
+scripts/smoke_dataset_sft.py:145:        print("FAIL missing pixel_values_latent; sample may not contain a future visual hint", file=sys.stderr)
+scripts/train.sh:78:    --latent_lambda $LATENT_LAMBDA \
+scripts/smoke_forward_sft.py:65:    config.latent_lambda = args.latent_lambda
+scripts/smoke_forward_sft.py:91:        ["<|latent|>", "<|latent_start|>", "<|latent_end|>"],
+scripts/smoke_forward_sft.py:95:    config.latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
+scripts/smoke_forward_sft.py:96:    config.latent_end_id = processor.tokenizer.convert_tokens_to_ids("<|latent_end|>")
+scripts/smoke_grep_latent_paths.sh:23:        'latent_start|latent_end|latent_target_embeds|pixel_values_latent|image_out_mask|latent_hidden_state|masked_scatter|mse_loss|latent_lambda' \
+src/dataset/twiff_sft_dataset.py:543:        self.latent_start_idx = processor.tokenizer("<|latent_start|>", return_tensors="pt")["input_ids"][0]
+src/dataset/twiff_sft_dataset.py:544:        self.latent_end_idx = processor.tokenizer("<|latent_end|>", return_tensors="pt")["input_ids"][0]
+src/dataset/twiff_sft_dataset.py:640:        batch["pixel_values_latent"] = assistant_batch.get("pixel_values", None)
+src/dataset/twiff_sft_dataset.py:646:            self.latent_start_idx,
+src/dataset/twiff_sft_dataset.py:647:            self.latent_end_idx,
+src/dataset/twiff_sft_dataset.py:670:        if batch["pixel_values_latent"] is not None:
+src/dataset/twiff_sft_dataset.py:671:            image_out_mask = mask_image_output_tokens(
+src/dataset/twiff_sft_dataset.py:672:                batch["input_ids"], self.latent_start_idx, self.latent_token_idx
+src/dataset/twiff_sft_dataset.py:674:            batch["image_out_mask"] = image_out_mask
+src/dataset/twiff_sft_dataset.py:810:            batch["pixel_values_latent"] = assistant_batch.get("pixel_values", None)
+src/dataset/twiff_sft_dataset.py:816:                self.latent_start_idx,
+src/dataset/twiff_sft_dataset.py:817:                self.latent_end_idx,
+src/dataset/twiff_sft_dataset.py:828:            batch["image_out_mask"] = mask_image_output_tokens(
+src/dataset/twiff_sft_dataset.py:829:                batch["input_ids"], self.latent_start_idx, self.latent_token_idx
+scripts/train_twiff.sh:93:    --latent_lambda $LATENT_LAMBDA \
+src/constants.py:12:LATENT_START_TOKEN = "<|latent_start|>"
+src/constants.py:13:LATENT_END_TOKEN = "<|latent_end|>"
+src/constants.py:26:2.  **Visual Mode**: `<|latent_start|>Your visual reasoning process<|latent_end|>`
+src/constants.py:36:**Visual Chain-of-Thought**: `<|latent_start|>Your visual reasoning process<|latent_end|>`
+src/params.py:13:            "help": "For qwen3_vl only: use RICE_Qwen3VL generation behavior that forces the first assistant token to be <|latent_start|>.",
+src/params.py:68:    latent_lambda: float = field(default=0.1)
+src/params.py:184:            "help": "DUAL mode: orig uses <|latent_start|><|latent|><|latent_end|>, "
+src/params.py:268:                    "merge their consecutive <|latent_start|>...<|latent_end|> envelopes "
+src/model/future_l1.py:174:    latent_hidden_state = None
+src/model/future_l1.py:175:    latent_hidden_states = None
+src/model/future_l1.py:180:    # otherwise default to 2x config max_latent_token with early latent_end allowed.
+src/model/future_l1.py:196:    if pending_forced_latent and getattr(model.config, "latent_start_id", None) is None:
+src/model/future_l1.py:197:        raise ValueError("force_initial_latent=True requires config.latent_start_id to be set.")
+src/model/future_l1.py:207:        model_inputs.update({"latent_hidden_state": latent_hidden_state})
+src/model/future_l1.py:258:            next_tokens = torch.full_like(next_tokens, model.config.latent_start_id)
+src/model/future_l1.py:266:        latent_start = (last_tokens == model.config.latent_start_id).to(device=input_ids.device)
+src/model/future_l1.py:267:        latent_end_predicted = (next_tokens == model.config.latent_end_id).to(device=input_ids.device)
+src/model/future_l1.py:268:        temp_latent = in_latent_mode | latent_start
+src/model/future_l1.py:273:        # fixed_latent_budget mode: ignore model's <|latent_end|> prediction,
+src/model/future_l1.py:276:            latent_end = force_end_latent
+src/model/future_l1.py:278:            latent_end = latent_end_predicted | force_end_latent
+src/model/future_l1.py:279:        in_latent_mode = temp_latent & (~latent_end)
+src/model/future_l1.py:294:        latent_hidden_state = outputs.latent_hidden_state
+src/model/future_l1.py:296:        next_tokens[latent_end, None] = model.config.latent_end_id
+src/model/future_l1.py:297:        if return_dict_in_generate and latent_hidden_state is not None:
+src/model/future_l1.py:300:                state_step = torch.zeros_like(latent_hidden_state)
+src/model/future_l1.py:301:                state_step[latent_mask] = latent_hidden_state[latent_mask].detach()
+src/dataset/future_l1_dataset.py:381:        self.latent_start_idx = processor.tokenizer("<|latent_start|>", return_tensors="pt")["input_ids"][0]
+src/dataset/future_l1_dataset.py:382:        self.latent_end_idx = processor.tokenizer("<|latent_end|>", return_tensors="pt")["input_ids"][0]
+src/dataset/future_l1_dataset.py:448:        # the assistant turn into a single <|latent_start|>...<|latent_end|>
+src/dataset/future_l1_dataset.py:480:        batch['pixel_values_latent'] = assistant_batch.get('pixel_values', None)
+src/dataset/future_l1_dataset.py:486:            self.latent_start_idx,
+src/dataset/future_l1_dataset.py:487:            self.latent_end_idx,
+src/dataset/future_l1_dataset.py:509:        if batch['pixel_values_latent'] is not None:
+src/dataset/future_l1_dataset.py:510:            image_out_mask = mask_image_output_tokens(
+src/dataset/future_l1_dataset.py:511:                batch["input_ids"], self.latent_start_idx, self.latent_token_idx
+src/dataset/future_l1_dataset.py:513:            batch["image_out_mask"] = image_out_mask
+src/dataset/mixed_sft_dataset.py:238:_SEQ_PAD_KEYS = ("input_ids", "attention_mask", "labels", "mm_token_type_ids", "image_out_mask")
+src/dataset/mixed_sft_dataset.py:244:    "pixel_values_latent",
+src/dataset/mixed_sft_dataset.py:257:    if key == "image_out_mask":
+src/train/train.py:192:    latent_tokens = ["<|latent|>", "<|latent_start|>", "<|latent_end|>"]
+src/train/train.py:196:    latent_start_id = processor.tokenizer.convert_tokens_to_ids("<|latent_start|>")
+src/train/train.py:197:    latent_end_id = processor.tokenizer.convert_tokens_to_ids("<|latent_end|>")
+src/train/train.py:200:    model.config.latent_start_id = latent_start_id
+src/train/train.py:201:    model.config.latent_end_id = latent_end_id
+src/train/train.py:212:    model.config.latent_lambda = training_args.latent_lambda
+src/dataset/data_utils.py:82:        update_texts.append(prev + "<|im_start|>assistant" + after.replace("<|vision_start|><|image_pad|><|vision_end|>", "<|latent_start|><|image_pad|><|latent_end|>"))
+src/dataset/data_utils.py:94:        <|latent_start|><|image_pad|>...<|image_pad|><|latent_end|>
+src/dataset/data_utils.py:97:    (preserving order). Each image still produces its own pixel_values_latent
+src/dataset/data_utils.py:121:        return f"<|latent_start|>{pads}<|latent_end|>"
+src/dataset/data_utils.py:133:            lambda m: f"<|latent_start|>{m.group(1)}<|latent_end|>", after
+src/dataset/data_utils.py:141:    DUAL mode: Replace vision placeholders with orig tokens (<|latent_start|>...) or
+src/dataset/data_utils.py:159:            return f"<|latent_start|>{orig_mid}<|latent_end|>"
+src/dataset/data_utils.py:173:    latent_start: int,
+src/dataset/data_utils.py:174:    latent_end: int,
+src/dataset/data_utils.py:183:    DUAL mode: Replace tokens between (latent_start, latent_end) with latent_token,
+src/dataset/data_utils.py:186:    latent_start = _token_id_to_int(latent_start)
+src/dataset/data_utils.py:187:    latent_end = _token_id_to_int(latent_end)
+src/dataset/data_utils.py:216:        lat_s = (seq == latent_start) & after_assistant
+src/dataset/data_utils.py:217:        lat_e = (seq == latent_end) & after_assistant
+src/dataset/data_utils.py:386:    latent_start: int,
+src/dataset/data_utils.py:387:    latent_end: int,
+src/dataset/data_utils.py:409:    latent_start = _token_id_to_int(latent_start)
+src/dataset/data_utils.py:410:    latent_end = _token_id_to_int(latent_end)
+src/dataset/data_utils.py:441:        lat_s = (seq == latent_start) & after_assistant
+src/dataset/data_utils.py:442:        lat_e = (seq == latent_end) & after_assistant
+src/dataset/data_utils.py:540:    latent_start: int,
+src/dataset/data_utils.py:541:    latent_end: int,
+src/dataset/data_utils.py:568:                latent_start,
+src/dataset/data_utils.py:569:                latent_end,
+src/dataset/data_utils.py:583:                latent_start,
+src/dataset/data_utils.py:584:                latent_end,
+src/dataset/data_utils.py:599:            latent_start,
+src/dataset/data_utils.py:600:            latent_end,
+src/dataset/data_utils.py:613:        latent_start,
+src/dataset/data_utils.py:614:        latent_end,
+src/train/monkey_patch_forward.py:285:    latent_hidden_state: Optional[Tuple[torch.FloatTensor]] = None
+src/train/monkey_patch_forward.py:306:    latent_hidden_state: Optional[Tuple[torch.FloatTensor]] = None
+src/train/monkey_patch_forward.py:331:    latent_hidden_state: Optional[Tuple[torch.FloatTensor]] = None
+src/train/monkey_patch_forward.py:408:    pixel_values_latent: Optional[torch.Tensor] = None, # latent images
+src/train/monkey_patch_forward.py:410:    latent_target_embeds: Optional[torch.Tensor] = None,  # [N, H] offline GT; mutually exclusive with pixel_values_latent
+src/train/monkey_patch_forward.py:412:    latent_hidden_state: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:438:            latent_hidden_state = latent_hidden_state.to(inputs_embeds.device, inputs_embeds.dtype)
+src/train/monkey_patch_forward.py:439:            inputs_embeds[in_latent_mode, -1, :] = latent_hidden_state[in_latent_mode]
+src/train/monkey_patch_forward.py:447:        inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
+src/train/monkey_patch_forward.py:455:        inputs_embeds = inputs_embeds.masked_scatter(video_mask, video_embeds)
+src/train/monkey_patch_forward.py:457:    if latent_target_embeds is not None and pixel_values_latent is not None:
+src/train/monkey_patch_forward.py:458:        raise ValueError("Use only one of latent_target_embeds or pixel_values_latent for latent supervision.")
+src/train/monkey_patch_forward.py:460:    if latent_target_embeds is not None:
+src/train/monkey_patch_forward.py:461:        latent_image_embeds = latent_target_embeds.to(device=inputs_embeds.device, dtype=inputs_embeds.dtype)
+src/train/monkey_patch_forward.py:470:        inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, latent_image_embeds)
+src/train/monkey_patch_forward.py:472:    elif pixel_values_latent is not None:
+src/train/monkey_patch_forward.py:473:        latent_image_embeds = self.get_image_features(pixel_values_latent, image_grid_thw_latent)
+src/train/monkey_patch_forward.py:493:        inputs_embeds = inputs_embeds.masked_scatter(image_mask, latent_image_embeds)
+src/train/monkey_patch_forward.py:571:    pixel_values_latent: Optional[torch.Tensor] = None, # latent images
+src/train/monkey_patch_forward.py:573:    latent_target_embeds: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:574:    image_out_mask: Optional[torch.Tensor] = None, # latent token mask
+src/train/monkey_patch_forward.py:576:    latent_hidden_state: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:645:        pixel_values_latent=pixel_values_latent,
+src/train/monkey_patch_forward.py:647:        latent_target_embeds=latent_target_embeds,
+src/train/monkey_patch_forward.py:649:        latent_hidden_state=latent_hidden_state,
+src/train/monkey_patch_forward.py:659:        latent_hidden_state = selected_head(last_hidden)
+src/train/monkey_patch_forward.py:661:        latent_hidden_state = last_hidden
+src/train/monkey_patch_forward.py:676:    if image_out_mask is not None and (pixel_values_latent is not None or latent_target_embeds is not None):
+src/train/monkey_patch_forward.py:683:        shift_image_mask = image_out_mask[:, -(predict_embeddings.shape[1] - 1) :].to(predict_embeddings.device)
+src/train/monkey_patch_forward.py:690:            mse_loss = torch.nn.functional.mse_loss(shift_predict_embeddings, gt_embeddings)
+src/train/monkey_patch_forward.py:691:            latent_loss = mse_loss
+src/train/monkey_patch_forward.py:697:            loss = self.config.latent_lambda * latent_loss
+src/train/monkey_patch_forward.py:699:            loss = loss + self.config.latent_lambda * latent_loss
+src/train/monkey_patch_forward.py:709:        latent_hidden_state = latent_hidden_state,
+src/train/monkey_patch_forward.py:727:    pixel_values_latent: Optional[torch.Tensor] = None, # latent images
+src/train/monkey_patch_forward.py:729:    latent_target_embeds: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:731:    latent_hidden_state: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:749:            latent_hidden_state = latent_hidden_state.to(inputs_embeds.device, inputs_embeds.dtype)
+src/train/monkey_patch_forward.py:750:            inputs_embeds[in_latent_mode, -1, :] = latent_hidden_state[in_latent_mode]
+src/train/monkey_patch_forward.py:761:        inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
+src/train/monkey_patch_forward.py:769:        inputs_embeds = inputs_embeds.masked_scatter(video_mask, video_embeds)
+src/train/monkey_patch_forward.py:771:    if latent_target_embeds is not None and pixel_values_latent is not None:
+src/train/monkey_patch_forward.py:772:        raise ValueError("Use only one of latent_target_embeds or pixel_values_latent for latent supervision.")
+src/train/monkey_patch_forward.py:774:    if latent_target_embeds is not None:
+src/train/monkey_patch_forward.py:775:        latent_image_embeds = latent_target_embeds.to(device=inputs_embeds.device, dtype=inputs_embeds.dtype)
+src/train/monkey_patch_forward.py:784:        inputs_embeds = inputs_embeds.masked_scatter(latent_image_mask, latent_image_embeds)
+src/train/monkey_patch_forward.py:786:    elif pixel_values_latent is not None:
+src/train/monkey_patch_forward.py:787:        latent_image_embeds, _ = self.get_image_features(pixel_values_latent, image_grid_thw_latent)
+src/train/monkey_patch_forward.py:808:        inputs_embeds = inputs_embeds.masked_scatter(latent_image_mask, latent_image_embeds)
+src/train/monkey_patch_forward.py:950:    pixel_values_latent: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:952:    latent_target_embeds: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:954:    latent_hidden_state: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:971:            latent_hidden_state = latent_hidden_state.to(inputs_embeds.device, inputs_embeds.dtype)
+src/train/monkey_patch_forward.py:972:            inputs_embeds[in_latent_mode, -1, :] = latent_hidden_state[in_latent_mode]
+src/train/monkey_patch_forward.py:980:        inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
+src/train/monkey_patch_forward.py:988:        inputs_embeds = inputs_embeds.masked_scatter(video_mask, video_embeds)
+src/train/monkey_patch_forward.py:990:    if latent_target_embeds is not None and pixel_values_latent is not None:
+src/train/monkey_patch_forward.py:991:        raise ValueError("Use only one of latent_target_embeds or pixel_values_latent for latent supervision.")
+src/train/monkey_patch_forward.py:993:    if latent_target_embeds is not None:
+src/train/monkey_patch_forward.py:994:        latent_image_embeds = latent_target_embeds.to(device=inputs_embeds.device, dtype=inputs_embeds.dtype)
+src/train/monkey_patch_forward.py:1002:        inputs_embeds = inputs_embeds.masked_scatter(latent_mask, latent_image_embeds)
+src/train/monkey_patch_forward.py:1003:    elif pixel_values_latent is not None:
+src/train/monkey_patch_forward.py:1004:        latent_outputs = self.get_image_features(pixel_values_latent, image_grid_thw_latent, return_dict=True)
+src/train/monkey_patch_forward.py:1016:        inputs_embeds = inputs_embeds.masked_scatter(latent_mask, latent_image_embeds)
+src/train/monkey_patch_forward.py:1025:            and pixel_values_latent is not None
+src/train/monkey_patch_forward.py:1081:    pixel_values_latent: Optional[torch.Tensor] = None, # latent images
+src/train/monkey_patch_forward.py:1083:    latent_target_embeds: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:1084:    image_out_mask: Optional[torch.Tensor] = None, # latent token mask
+src/train/monkey_patch_forward.py:1086:    latent_hidden_state: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:1115:        pixel_values_latent=pixel_values_latent,
+src/train/monkey_patch_forward.py:1117:        latent_target_embeds=latent_target_embeds,
+src/train/monkey_patch_forward.py:1119:        latent_hidden_state=latent_hidden_state,
+src/train/monkey_patch_forward.py:1129:        latent_hidden_state = selected_head(last_hidden)
+src/train/monkey_patch_forward.py:1131:        latent_hidden_state = last_hidden
+src/train/monkey_patch_forward.py:1145:    if image_out_mask is not None and (pixel_values_latent is not None or latent_target_embeds is not None):
+src/train/monkey_patch_forward.py:1152:        shift_image_mask = image_out_mask[:, -(predict_embeddings.shape[1] - 1) :].to(predict_embeddings.device)
+src/train/monkey_patch_forward.py:1159:            mse_loss = torch.nn.functional.mse_loss(shift_predict_embeddings, gt_embeddings)
+src/train/monkey_patch_forward.py:1160:            latent_loss = mse_loss
+src/train/monkey_patch_forward.py:1166:            loss = self.config.latent_lambda * latent_loss
+src/train/monkey_patch_forward.py:1168:            loss = loss + self.config.latent_lambda * latent_loss
+src/train/monkey_patch_forward.py:1199:        latent_hidden_state=latent_hidden_state,
+src/train/monkey_patch_forward.py:1226:    pixel_values_latent: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:1228:    latent_target_embeds: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:1229:    image_out_mask: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:1231:    latent_hidden_state: Optional[torch.Tensor] = None,
+src/train/monkey_patch_forward.py:1250:        pixel_values_latent=pixel_values_latent,
+src/train/monkey_patch_forward.py:1252:        latent_target_embeds=latent_target_embeds,
+src/train/monkey_patch_forward.py:1254:        latent_hidden_state=latent_hidden_state,
+src/train/monkey_patch_forward.py:1263:        latent_hidden_state = selected_head(last_hidden)
+src/train/monkey_patch_forward.py:1265:        latent_hidden_state = last_hidden
+src/train/monkey_patch_forward.py:1277:    if image_out_mask is not None and (pixel_values_latent is not None or latent_target_embeds is not None):
+src/train/monkey_patch_forward.py:1284:        shift_image_mask = image_out_mask[:, -(predict_embeddings.shape[1] - 1) :].to(predict_embeddings.device)
+src/train/monkey_patch_forward.py:1291:            latent_loss = torch.nn.functional.mse_loss(shift_predict_embeddings, gt_embeddings)
+src/train/monkey_patch_forward.py:1297:            loss = self.config.latent_lambda * latent_loss
+src/train/monkey_patch_forward.py:1299:            loss = loss + self.config.latent_lambda * latent_loss
+src/train/monkey_patch_forward.py:1310:        latent_hidden_state=latent_hidden_state,
+
+## RL rollout, latent likelihood, DePO, and rewards
+RL_v2/future_l1_rl/vllm_runner/latent_recorder.py:2:LatentRecorder: accumulate per-step latents during generation and access them
+RL_v2/future_l1_rl/vllm_runner/latent_recorder.py:7:    from avt.vllm.latent_recorder import LatentRecorder
+RL_v2/future_l1_rl/vllm_runner/latent_recorder.py:10:    rec = LatentRecorder()               # starts UDP listener and sets env
+RL_v2/future_l1_rl/vllm_runner/latent_recorder.py:22:    rec = LatentRecorder(set_env=False)   # binds to existing env address
+RL_v2/future_l1_rl/vllm_runner/latent_recorder.py:38:class LatentRecorder:
+RL_v2/train.sh:4:#   depo_ctr | dapo_ctr | grpo_ctr = base mode + outcome-contrastive R_ctr (lambda_c=1, tau=0.5)
+RL_v2/train.sh:204:    # HyLar-equivalent GRPO baseline: sampling_strategy=future_l1_depo turns on
+RL_v2/train.sh:214:      "worker.rollout.sampling_strategy=future_l1_depo"
+RL_v2/train.sh:219:    # GRPO + outcome-contrastive latent reward R_ctr (LA-DAPO).
+RL_v2/train.sh:220:    # HyLar-equivalent GRPO baseline: sampling_strategy=future_l1_depo turns on
+RL_v2/train.sh:230:      "worker.rollout.sampling_strategy=future_l1_depo"
+RL_v2/train.sh:232:      "worker.reward.reward_function_kwargs.latent_ctr_lambda=${FUTURE_L1_LATENT_CTR_LAMBDA:-1.0}"
+RL_v2/train.sh:233:      "worker.reward.reward_function_kwargs.latent_ctr_temperature=${FUTURE_L1_LATENT_CTR_TEMPERATURE:-0.5}"
+RL_v2/train.sh:250:      "worker.rollout.sampling_strategy=future_l1_depo"
+RL_v2/train.sh:255:    # DAPO + outcome-contrastive latent reward R_ctr (LA-DAPO).
+RL_v2/train.sh:269:      "worker.rollout.sampling_strategy=future_l1_depo"
+RL_v2/train.sh:271:      "worker.reward.reward_function_kwargs.latent_ctr_lambda=${FUTURE_L1_LATENT_CTR_LAMBDA:-1.0}"
+RL_v2/train.sh:272:      "worker.reward.reward_function_kwargs.latent_ctr_temperature=${FUTURE_L1_LATENT_CTR_TEMPERATURE:-0.5}"
+RL_v2/train.sh:283:      "algorithm.latent_clip_ratio_low=${LATENT_CLIP_LOW:-0.1}"
+RL_v2/train.sh:284:      "algorithm.latent_clip_ratio_high=${LATENT_CLIP_HIGH:-0.1}"
+RL_v2/train.sh:285:      "algorithm.latent_clip_ratio_dual=${LATENT_CLIP_DUAL:-3.0}"
+RL_v2/train.sh:293:      "worker.rollout.sampling_strategy=future_l1_depo"
+RL_v2/train.sh:298:    # DePO + outcome-contrastive latent reward R_ctr (LA-DAPO, paper tau=0.5).
+RL_v2/train.sh:306:      "algorithm.latent_clip_ratio_low=${LATENT_CLIP_LOW:-0.1}"
+RL_v2/train.sh:307:      "algorithm.latent_clip_ratio_high=${LATENT_CLIP_HIGH:-0.1}"
+RL_v2/train.sh:308:      "algorithm.latent_clip_ratio_dual=${LATENT_CLIP_DUAL:-3.0}"
+RL_v2/train.sh:316:      "worker.rollout.sampling_strategy=future_l1_depo"
+RL_v2/train.sh:318:      "worker.reward.reward_function_kwargs.latent_ctr_lambda=${FUTURE_L1_LATENT_CTR_LAMBDA:-1.0}"
+RL_v2/train.sh:319:      "worker.reward.reward_function_kwargs.latent_ctr_temperature=${FUTURE_L1_LATENT_CTR_TEMPERATURE:-0.5}"
+RL_v2/future_l1_rl_patch.py:95:    ``sampling_strategy=future_l1_depo``). It is what makes the latent state
+RL_v2/future_l1_rl_patch.py:99:    `LatentRecorder` TCP hook.
+RL_v2/future_l1_rl_patch.py:155:            "use sampling_strategy=future_l1_depo) will silently DEGRADE to "
+RL_v2/future_l1_rl/vllm_runner/future_l1_gpu_model_runner.py:28:       driver-side ``LatentRecorder`` can build the per-trajectory ``z``
+RL_v2/future_l1_rl/vllm_runner/future_l1_gpu_model_runner.py:507:    # driver-side ``LatentRecorder`` can stitch per-trajectory ``z``.
+RL_v2/future_l1_rl/vllm_runner/future_l1_gpu_model_runner.py:745:        # === FutureL1 Hook C: emit per-step latents to LatentRecorder ===
+RL_v2/verl/trainer/config.py:125:    latent_clip_ratio_low: float = 0.1
+RL_v2/verl/trainer/config.py:127:    latent_clip_ratio_high: float = 0.1
+RL_v2/verl/trainer/config.py:129:    latent_clip_ratio_dual: float = 3.0
+RL_v2/verl/trainer/config.py:224:        self.worker.actor.latent_clip_ratio_low = self.algorithm.latent_clip_ratio_low
+RL_v2/verl/trainer/config.py:225:        self.worker.actor.latent_clip_ratio_high = self.algorithm.latent_clip_ratio_high
+RL_v2/verl/trainer/config.py:226:        self.worker.actor.latent_clip_ratio_dual = self.algorithm.latent_clip_ratio_dual
+RL_v2/examples/config_future_l1.yaml:60:  latent_clip_ratio_low: 0.05    # lower clip bound for latent tokens
+RL_v2/examples/config_future_l1.yaml:61:  latent_clip_ratio_high: 0.05   # upper clip bound for latent tokens
+RL_v2/examples/config_future_l1.yaml:62:  latent_clip_ratio_dual: 3.0    # dual-clip constant for latent tokens
+RL_v2/examples/config_future_l1.yaml:126:    # Default is `future_l1_depo` so that GRPO / DAPO / DePO are *baseline-
+RL_v2/examples/config_future_l1.yaml:134:    sampling_strategy: future_l1_depo  # default | future_l1_text | future_l1_depo
+RL_v2/examples/config_future_l1.yaml:156:      latent_div_lambda: 0.0
+RL_v2/examples/config_future_l1.yaml:157:      latent_ctr_lambda: 0.0
+RL_v2/examples/config_future_l1.yaml:158:      latent_ctr_temperature: 0.5
+RL_v2/verl/trainer/ray_trainer.py:139:def _ldpo_build_latent_mask(
+RL_v2/verl/workers/actor/dp_actor.py:142:def _future_l1_build_latent_mask(
+RL_v2/verl/workers/actor/dp_actor.py:153:    surrogate, matching HyLar's build_latent_mask.
+RL_v2/verl/workers/actor/dp_actor.py:181:def _future_l1_latent_log_probs(
+RL_v2/verl/workers/actor/dp_actor.py:254:    def _is_future_l1_depo(self) -> bool:
+RL_v2/verl/workers/actor/dp_actor.py:256:        return strategy in ("future_l1_depo", "swimbird_depo")
+RL_v2/verl/workers/actor/dp_actor.py:294:        is_future_l1 = self._is_future_l1_depo()
+RL_v2/verl/workers/actor/dp_actor.py:398:                vmf_lp = _future_l1_latent_log_probs(
+RL_v2/verl/workers/actor/dp_actor.py:442:                lat_mask = _future_l1_build_latent_mask(input_ids, response_length, start_id, end_id)
+RL_v2/verl/workers/actor/dp_actor.py:512:        if self._is_future_l1_depo() and "latents" in data.non_tensor_batch:
+RL_v2/verl/workers/actor/dp_actor.py:547:        if self._is_future_l1_depo() and "latents" in data.non_tensor_batch:
+RL_v2/verl/workers/actor/dp_actor.py:556:            self._is_future_l1_depo()
+RL_v2/verl/workers/actor/dp_actor.py:615:                        lat_mask_full = _future_l1_build_latent_mask(
+RL_v2/verl/workers/actor/dp_actor.py:643:                                clip_ratio_low=self.config.latent_clip_ratio_low,
+RL_v2/verl/workers/actor/dp_actor.py:644:                                clip_ratio_high=self.config.latent_clip_ratio_high,
+RL_v2/verl/workers/actor/dp_actor.py:645:                                clip_ratio_dual=self.config.latent_clip_ratio_dual,
+RL_v2/verl/workers/actor/config.py:138:    latent_clip_ratio_low: float = 0.1
+RL_v2/verl/workers/actor/config.py:139:    latent_clip_ratio_high: float = 0.1
+RL_v2/verl/workers/actor/config.py:140:    latent_clip_ratio_dual: float = 3.0
+RL_v2/examples/reward_function/future_l1_reward_function.py:29:* **Temporal diversity reward** ``R_div``: optional ``latent_div_lambda *
+RL_v2/examples/reward_function/future_l1_reward_function.py:30:  mean(cos(block_t, block_{t+1})^2)`` (equivalent to ``+ latent_div_lambda *
+RL_v2/examples/reward_function/future_l1_reward_function.py:31:  R_div`` with ``R_div = -mean(cos^2)``). Each latent block is mean-pooled
+RL_v2/examples/reward_function/future_l1_reward_function.py:33:* **Outcome-contrastive latent reward** ``R_ctr`` (LA-DAPO): optional
+RL_v2/examples/reward_function/future_l1_reward_function.py:34:  ``latent_ctr_lambda * R_ctr`` grouped by rollout ``uid``, using recorded
+RL_v2/examples/reward_function/future_l1_reward_function.py:38:    overall = (1 - format_weight) * accuracy  +  format_weight * format  -  length_penalty_weight * length_penalty  -  latent_div_part  +  latent_ctr_part
+RL_v2/examples/reward_function/future_l1_reward_function.py:360:def _temporal_latent_diversity_stats(raw_predict: str, latents: Any) -> Tuple[float, int, int, int]:
+RL_v2/examples/reward_function/future_l1_reward_function.py:402:    latent_div_lambda: Optional[float] = None,
+RL_v2/examples/reward_function/future_l1_reward_function.py:403:    latent_ctr_lambda: Optional[float] = None,
+RL_v2/examples/reward_function/future_l1_reward_function.py:404:    latent_ctr_temperature: Optional[float] = None,
+RL_v2/examples/reward_function/future_l1_reward_function.py:418:          vectors recorded by ``future_l1_depo`` rollout
+RL_v2/examples/reward_function/future_l1_reward_function.py:424:        latent_div_part, latent_block_cos2,
+RL_v2/examples/reward_function/future_l1_reward_function.py:438:    if latent_div_lambda is None:
+RL_v2/examples/reward_function/future_l1_reward_function.py:440:            latent_div_lambda = float(
+RL_v2/examples/reward_function/future_l1_reward_function.py:447:            latent_div_lambda = 0.0
+RL_v2/examples/reward_function/future_l1_reward_function.py:448:    if latent_ctr_lambda is None:
+RL_v2/examples/reward_function/future_l1_reward_function.py:450:            latent_ctr_lambda = float(
+RL_v2/examples/reward_function/future_l1_reward_function.py:457:            latent_ctr_lambda = 0.0
+RL_v2/examples/reward_function/future_l1_reward_function.py:458:    if latent_ctr_temperature is None:
+RL_v2/examples/reward_function/future_l1_reward_function.py:460:            latent_ctr_temperature = float(
+RL_v2/examples/reward_function/future_l1_reward_function.py:467:            latent_ctr_temperature = 0.5
+RL_v2/examples/reward_function/future_l1_reward_function.py:510:        temperature=latent_ctr_temperature,
+RL_v2/examples/reward_function/future_l1_reward_function.py:527:        latent_cos2, latent_pair_count, latent_block_count, latent_vector_count = _temporal_latent_diversity_stats(
+RL_v2/examples/reward_function/future_l1_reward_function.py:531:        latent_div_part = float(latent_div_lambda or 0.0) * latent_cos2
+RL_v2/examples/reward_function/future_l1_reward_function.py:532:        latent_ctr_part = float(latent_ctr_lambda or 0.0) * ctr_rewards[i]
+RL_v2/examples/reward_function/future_l1_reward_function.py:535:                "overall": accuracy_part + format_part - length_part - latent_div_part + latent_ctr_part,
+RL_v2/examples/reward_function/future_l1_reward_function.py:541:                "latent_div_part": latent_div_part,
+RL_v2/examples/reward_function/future_l1_reward_function.py:546:                "latent_ctr_reward": ctr_rewards[i],
+RL_v2/examples/reward_function/future_l1_reward_function.py:547:                "latent_ctr_part": latent_ctr_part,
+RL_v2/examples/reward_function/future_l1_reward_function.py:548:                "latent_ctr_valid": float(ctr_rewards[i] != 0.0 or ctr_cases[i] != "none"),
+RL_v2/examples/reward_function/future_l1_reward_function.py:549:                "latent_ctr_case_id": ctr_case_ids[i],
+RL_v2/examples/reward_function/future_l1_reward_function.py:571:                f"r_ctr={s.get('latent_ctr_reward', 0):.3f} rep={s['repetition_score']:.2f} | resp[:400]={preview!r}",
+RL_v2/examples/reward_function/test_outcome_contrastive_latent_reward.py:1:"""Unit tests for outcome-contrastive latent reward R_ctr."""
+RL_v2/examples/reward_function/cot_thinking_reward_function.py:48:    latent_div_lambda: Optional[float] = None,
+RL_v2/examples/reward_function/cot_thinking_reward_function.py:49:    latent_ctr_lambda: Optional[float] = None,
+RL_v2/examples/reward_function/cot_thinking_reward_function.py:50:    latent_ctr_temperature: Optional[float] = None,
+RL_v2/examples/reward_function/cot_thinking_reward_function.py:54:    del latent_div_lambda, latent_ctr_lambda, latent_ctr_temperature, kwargs
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:315:        # Only enabled when sampling_strategy=="future_l1_depo" so we don't pay
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:319:            getattr(self.config, "sampling_strategy", "default") in ("future_l1_depo", "swimbird_depo")
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:324:                from future_l1_rl.vllm_runner.latent_recorder import LatentRecorder  # noqa: PLC0415
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:329:                future_l1_recorder = LatentRecorder(
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:333:                print(f"[FutureL1 rollout] LatentRecorder unavailable, falling back: {_e}")
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:350:                    latents_array = rec.to_object_array_auto(
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:362:                latents_array = None
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:409:        if latents_array is not None:
+RL_v2/verl/workers/rollout/vllm_rollout_spmd.py:410:            non_tensor_batch["latents"] = latents_array
+RL_v2/verl/workers/rollout/config.py:46:    """One of {"default", "future_l1_text", "future_l1_depo"}.
+RL_v2/verl/workers/rollout/config.py:55:    - "future_l1_depo"  : HyLar-equivalent path. Latent-aware vLLM rollout +
+RL_v2/verl/workers/rollout/config.py:56:      per-step latent recording via `LatentRecorder` + vMF log-prob
+RL_v2/examples/reward_function/outcome_contrastive_latent_reward.py:1:"""Outcome-contrastive latent reward R_ctr (LA-DAPO, Eq. ctr)."""
+
+## Evaluation and latent export
+lmms-eval/examples/eval_twiffbench_future_l1.sh:14:output_path="./logs_twiffbench_future_l1/"
+lmms-eval/examples/eval_twiffbench_future_l1.sh:19:        --model future_l1 \
+lmms-eval/examples/eval_twiffbench_future_l1.sh:21:        --tasks twiffbench_future_l1 \
+lmms-eval/examples/eval_twiffbench_future_l1.sh:26:        --log_samples_suffix 'twiffbench_future_l1' \
+lmms-eval/tools/twiffbench/post_score.py:51:# Default parquet shards (same as twiffbench[_future_l1].yaml). Override with --parquet.
+lmms-eval/examples/eval_futurebench_future_l1.sh:11:task='futurebench_future_l1'
+lmms-eval/examples/eval_futurebench_future_l1.sh:12:output_path="./logs_futurebench_future_l1/"
+lmms-eval/examples/eval_futurebench_future_l1.sh:20:        --model future_l1 \
+lmms-eval/examples/eval_futurebench_future_l1.sh:27:        --log_samples_suffix 'future_l1' \
+lmms-eval/tools/twiffbench/build_cache.py:17:    python tools/twiffbench/build_cache.py --out logs_twiffbench_future_l1/_cache
+lmms-eval/lmms_eval/tasks/twiffbench/twiffbench_future_l1.yaml:31:task: twiffbench_future_l1
+lmms-eval/lmms_eval/tasks/twiffbench/twiffbench_future_l1.yaml:53:# set by the model wrapper (for ``--model future_l1`` that is ``FUTURE_L1_SYSTEM_PROMPT``
+lmms-eval/lmms_eval/models/future_l1.py:9:``vlmeval/vlm/future_l1/model.py``.
+lmms-eval/lmms_eval/models/future_l1.py:12:    Set one of these to the Future-L1 repo root that contains ``src/model/future_l1``
+lmms-eval/lmms_eval/models/future_l1.py:22:        --model future_l1 \
+lmms-eval/lmms_eval/models/future_l1.py:285:        # `src/model/future_l1` 既可能是目录(包),也可能是单文件 future_l1.py;两者都接受
+lmms-eval/lmms_eval/models/future_l1.py:286:        future_l1_pkg = os.path.join(c, "src", "model", "future_l1")
+lmms-eval/lmms_eval/models/future_l1.py:287:        future_l1_mod = os.path.join(c, "src", "model", "future_l1.py")
+lmms-eval/lmms_eval/models/future_l1.py:289:        if (os.path.isdir(future_l1_pkg) or os.path.isfile(future_l1_mod)) and os.path.isfile(monkey_patch):
+lmms-eval/lmms_eval/models/future_l1.py:294:        "The directory must contain `src/model/future_l1(.py)` and `src/train/monkey_patch_forward.py`."
+lmms-eval/lmms_eval/models/future_l1.py:315:@register_model("future_l1")
+lmms-eval/lmms_eval/models/future_l1.py:416:        eval_logger.info(f"[future_l1] using code_root={code_root}")
+lmms-eval/lmms_eval/models/future_l1.py:418:        from src.model.future_l1 import (
+lmms-eval/lmms_eval/models/future_l1.py:495:        self.latent_export_dir = os.environ.get("FUTURE_L1_LATENT_EXPORT_DIR")
+lmms-eval/lmms_eval/models/future_l1.py:496:        self.latent_export_max_per_rank = int(os.environ.get("FUTURE_L1_LATENT_EXPORT_MAX_PER_RANK", "20000"))
+lmms-eval/lmms_eval/models/future_l1.py:497:        self.mirage_export_max_per_type_per_rank = int(os.environ.get("FUTURE_L1_MIRAGE_EXPORT_MAX_PER_TYPE_PER_RANK", "5000"))
+lmms-eval/lmms_eval/models/future_l1.py:502:            if self.latent_export_dir is None:
+lmms-eval/lmms_eval/models/future_l1.py:503:                self.latent_export_dir = os.path.join(os.getcwd(), "future_l1_latent_exports")
+lmms-eval/lmms_eval/models/future_l1.py:504:            os.makedirs(self.latent_export_dir, exist_ok=True)
+lmms-eval/lmms_eval/models/future_l1.py:505:        self._latent_export_counter = 0
+lmms-eval/lmms_eval/models/future_l1.py:506:        self._mirage_export_counter = 0
+lmms-eval/lmms_eval/models/future_l1.py:532:        """Use a TwiFF-specific default system when the task is ``twiffbench_future_l1``.
+lmms-eval/lmms_eval/models/future_l1.py:537:        if str(task_name) != "twiffbench_future_l1":
+lmms-eval/lmms_eval/models/future_l1.py:632:                        eval_logger.warning("[future_l1] Mirage-style export skipped prompt hidden states: no inner model found")
+lmms-eval/lmms_eval/models/future_l1.py:639:                latent_states = getattr(cont, "latent_states", None)
+lmms-eval/lmms_eval/models/future_l1.py:640:                latent_mask = getattr(cont, "latent_mask", None)
+lmms-eval/lmms_eval/models/future_l1.py:664:                            remaining_type = self.mirage_export_max_per_type_per_rank - current_count
+lmms-eval/lmms_eval/models/future_l1.py:680:                        latents = _latent_trajectory_from_output(latent_states, latent_mask, batch_idx)
+lmms-eval/lmms_eval/models/future_l1.py:683:                            remaining = self.latent_export_max_per_rank - sum(arr.shape[0] for arr in export_embeddings)
+lmms-eval/lmms_eval/models/future_l1.py:693:                                remaining_latent = self.mirage_export_max_per_type_per_rank - sum(
+lmms-eval/lmms_eval/models/future_l1.py:713:                        print(f"\033[31m[future_l1][prompt rank{self.rank}]\033[0m", context)
+lmms-eval/lmms_eval/models/future_l1.py:714:                        print(f"\033[33m[future_l1][raw    rank{self.rank}]\033[0m", raw)
+lmms-eval/lmms_eval/models/future_l1.py:715:                        print(f"\033[32m[future_l1][answer rank{self.rank}]\033[0m", response)
+lmms-eval/lmms_eval/models/future_l1.py:733:                self.latent_export_dir,
+lmms-eval/lmms_eval/models/future_l1.py:734:                f"latent_embeddings_rank{self.rank}_part{self._latent_export_counter}.npz",
+lmms-eval/lmms_eval/models/future_l1.py:745:            self._latent_export_counter += 1
+lmms-eval/lmms_eval/models/future_l1.py:746:            eval_logger.info(f"[future_l1] exported latent embeddings to {export_path}")
+lmms-eval/lmms_eval/models/future_l1.py:756:                self.latent_export_dir,
+lmms-eval/lmms_eval/models/future_l1.py:757:                f"mirage_embeddings_rank{self.rank}_part{self._mirage_export_counter}.npz",
+lmms-eval/lmms_eval/models/future_l1.py:768:            self._mirage_export_counter += 1
+lmms-eval/lmms_eval/models/future_l1.py:769:            eval_logger.info(f"[future_l1] exported Mirage-style embeddings to {mirage_path}")
+lmms-eval/tools/plot_future_l1_latent_umap.py:5:  python tools/plot_future_l1_latent_umap.py \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:9:  python tools/plot_future_l1_mirage_fig7.py \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:11:      sft=logs_futurebench_future_l1_mirage_fig7/sft/mirage_exports \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:12:      dapo=logs_futurebench_future_l1_mirage_fig7/dapo/mirage_exports \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:13:      colvr050=logs_futurebench_future_l1_mirage_fig7/colvr050/mirage_exports \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:14:      colvr020_div010=logs_futurebench_future_l1_mirage_fig7/colvr020_div010/mirage_exports \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:15:    --output figures/future_l1_mirage_fig7_tsne.pdf \
+lmms-eval/tools/plot_future_l1_mirage_fig7.py:389:    parser.add_argument("--runs", nargs="+", required=True, help="name=mirage_export_dir_or_npz")
+lmms-eval/tools/plot_future_l1_latent_blocks.py:159:    parser.add_argument("--runs", nargs="+", required=True, help="name=latent_export_dir_or_npz")
+lmms-eval/lmms_eval/models/swimbird.py:3:from lmms_eval.models.future_l1 import FutureL1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_action_count_future_l1.yaml:2:task: mvbench_action_count_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_unexpected_action_future_l1.yaml:2:task: mvbench_unexpected_action_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_action_prediction_future_l1.yaml:2:task: mvbench_action_prediction_future_l1
+lmms-eval/lmms_eval/tasks/futurebench/futurebench_future_l1.yaml:6:task: futurebench_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_moving_attribute_future_l1.yaml:2:task: mvbench_moving_attribute_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_moving_count_future_l1.yaml:2:task: mvbench_moving_count_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_moving_direction_future_l1.yaml:2:task: mvbench_moving_direction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_character_order_future_l1.yaml:2:task: mvbench_character_order_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_action_sequence_future_l1.yaml:2:task: mvbench_action_sequence_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_state_change_future_l1.yaml:2:task: mvbench_state_change_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_object_shuffle_future_l1.yaml:2:task: mvbench_object_shuffle_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:3:  - mvbench_action_sequence_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:4:  - mvbench_moving_count_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:5:  - mvbench_action_prediction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:6:  - mvbench_episodic_reasoning_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:7:  - mvbench_action_antonym_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:8:  - mvbench_action_count_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:9:  - mvbench_scene_transition_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:10:  - mvbench_object_shuffle_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:11:  - mvbench_object_existence_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:12:  - mvbench_fine_grained_pose_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:13:  - mvbench_unexpected_action_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:14:  - mvbench_moving_direction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:15:  - mvbench_state_change_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:16:  - mvbench_object_interaction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:17:  - mvbench_character_order_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:18:  - mvbench_action_localization_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:19:  - mvbench_counterfactual_inference_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:20:  - mvbench_fine_grained_action_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:21:  - mvbench_moving_attribute_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_swimbird.yaml:22:  - mvbench_egocentric_navigation_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_fine_grained_action_future_l1.yaml:2:task: mvbench_fine_grained_action_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_egocentric_navigation_future_l1.yaml:2:task: mvbench_egocentric_navigation_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:1:group: mvbench_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:3:  - mvbench_action_sequence_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:4:  - mvbench_moving_count_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:5:  - mvbench_action_prediction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:6:  - mvbench_episodic_reasoning_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:7:  - mvbench_action_antonym_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:8:  - mvbench_action_count_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:9:  - mvbench_scene_transition_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:10:  - mvbench_object_shuffle_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:11:  - mvbench_object_existence_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:12:  - mvbench_fine_grained_pose_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:13:  - mvbench_unexpected_action_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:14:  - mvbench_moving_direction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:15:  - mvbench_state_change_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:16:  - mvbench_object_interaction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:17:  - mvbench_character_order_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:18:  - mvbench_action_localization_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:19:  - mvbench_counterfactual_inference_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:20:  - mvbench_fine_grained_action_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:21:  - mvbench_moving_attribute_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_future_l1.yaml:22:  - mvbench_egocentric_navigation_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_object_existence_future_l1.yaml:2:task: mvbench_object_existence_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_scene_transition_future_l1.yaml:2:task: mvbench_scene_transition_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_object_interaction_future_l1.yaml:2:task: mvbench_object_interaction_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_counterfactual_inference_future_l1.yaml:2:task: mvbench_counterfactual_inference_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_fine_grained_pose_future_l1.yaml:2:task: mvbench_fine_grained_pose_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_episodic_reasoning_future_l1.yaml:2:task: mvbench_episodic_reasoning_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_action_antonym_future_l1.yaml:2:task: mvbench_action_antonym_future_l1
+lmms-eval/lmms_eval/tasks/mvbench/mvbench_action_localization_future_l1.yaml:2:task: mvbench_action_localization_future_l1
+lmms-eval/lmms_eval/models/__init__.py:61:    "future_l1": "FutureL1",
+
+## Dataset schemas and collators
+src/dataset/twiff_sft_dataset.py:88:    Expected JSON fields per sample:
+src/dataset/twiff_sft_dataset.py:92:        reasoning_image– list of 1-based frame indices for the reasoning image(s)
+src/dataset/twiff_sft_dataset.py:191:                        if "reasoning_image" in item:
+src/dataset/twiff_sft_dataset.py:194:                                "source_format": "twiff_frames",
+src/dataset/twiff_sft_dataset.py:201:                                "reasoning_image": [int(x) for x in item.get("reasoning_image", [])],
+src/dataset/twiff_sft_dataset.py:209:                                "source_format": "chat_video_distill",
+src/dataset/twiff_sft_dataset.py:216:                                "reasoning_image": [],
+src/dataset/twiff_sft_dataset.py:222:                                f"Sample in {file_path} has neither 'reasoning_image' nor 'messages'/'videos', skipping."
+src/dataset/twiff_sft_dataset.py:230:                "source_format": Value("string"),
+src/dataset/twiff_sft_dataset.py:241:                "reasoning_image": Sequence(Value("int64")),
+src/dataset/twiff_sft_dataset.py:384:    Reads the 'video', 'image' (frame indices), and 'reasoning_image' (frame
+src/dataset/twiff_sft_dataset.py:396:    reasoning_indices = list(example.get("reasoning_image", []))
+src/dataset/twiff_sft_dataset.py:529:class TwiFFDataCollator:
+src/dataset/twiff_sft_dataset.py:533:    Mirrors FutureL1DataCollator but calls twiff_cot_preprocess_function to
+src/dataset/twiff_sft_dataset.py:843:        source_format = ex.get("source_format")
+src/dataset/twiff_sft_dataset.py:844:        if source_format:
+src/dataset/twiff_sft_dataset.py:845:            return source_format == "twiff_frames"
+src/dataset/twiff_sft_dataset.py:846:        return "reasoning_image" in ex
+src/dataset/twiff_sft_dataset.py:860:def make_supervised_data_module_twiff(processor, args):
+src/dataset/twiff_sft_dataset.py:896:    data_collator = TwiFFDataCollator(processor=processor, args=args)
+src/dataset/__init__.py:1:from .future_l1_dataset import make_supervised_data_module
+src/dataset/__init__.py:2:from .twiff_sft_dataset import make_supervised_data_module_twiff
+src/dataset/__init__.py:3:from .mixed_sft_dataset import make_supervised_data_module_mixed
+src/dataset/__init__.py:6:    "make_supervised_data_module",
+src/dataset/__init__.py:7:    "make_supervised_data_module_twiff",
+src/dataset/__init__.py:8:    "make_supervised_data_module_mixed",
+src/dataset/mixed_sft_dataset.py:8:sub-collator (TwiFFDataCollator / FutureL1DataCollator). Mixed-source batches
+src/dataset/mixed_sft_dataset.py:14:  - has ``reasoning_image`` whose entries are ints (or empty + has
+src/dataset/mixed_sft_dataset.py:16:  - otherwise (``conversations`` + path-list ``image``/``reasoning_image``)
+src/dataset/mixed_sft_dataset.py:31:from .future_l1_dataset import FutureL1DataCollator, FutureL1SFTDataset, make_supervised_data_module
+src/dataset/mixed_sft_dataset.py:32:from .twiff_sft_dataset import TwiFFDataCollator, TwiFFSFTDataset, make_supervised_data_module_twiff
+src/dataset/mixed_sft_dataset.py:62:    # twiff frame-index format: reasoning_image / image are int lists
+src/dataset/mixed_sft_dataset.py:63:    ri = record.get("reasoning_image", None)
+src/dataset/mixed_sft_dataset.py:78:        "reasoning_image" in record or "image" in record
+src/dataset/mixed_sft_dataset.py:347:        self.twiff_collator = TwiFFDataCollator(processor=processor, args=args)
+src/dataset/mixed_sft_dataset.py:348:        self.future_l1_collator = FutureL1DataCollator(processor=processor, args=args)
+src/dataset/mixed_sft_dataset.py:390:def make_supervised_data_module_mixed(processor, args):
+src/dataset/mixed_sft_dataset.py:409:        return make_supervised_data_module_twiff(processor=processor, args=sub_args)
+src/dataset/mixed_sft_dataset.py:414:        return make_supervised_data_module(processor=processor, args=sub_args)
+src/dataset/future_l1_dataset.py:129:                            "reasoning_image": _resolve_paths(item.get("reasoning_image", [])),  # Default to empty list
+src/dataset/future_l1_dataset.py:146:            'reasoning_image': Sequence(Value('string')),
+src/dataset/future_l1_dataset.py:205:        "reasoning_image": ["path/to/reasoning_image_1.png", ...],
+src/dataset/future_l1_dataset.py:285:    reasoning_image_paths = example.get('reasoning_image', [])
+src/dataset/future_l1_dataset.py:286:    if shuffle_latent_images and reasoning_image_paths:
+src/dataset/future_l1_dataset.py:288:        shuffle_key = reasoning_text + "\n" + "|".join(map(str, reasoning_image_paths))
+src/dataset/future_l1_dataset.py:289:        reasoning_image_paths = _deterministic_shuffle_list(reasoning_image_paths, seed=base_seed, key=shuffle_key)
+src/dataset/future_l1_dataset.py:292:    reasoning_image_idx = 0
+src/dataset/future_l1_dataset.py:301:            if reasoning_image_idx < len(reasoning_image_paths):
+src/dataset/future_l1_dataset.py:302:                img_path = reasoning_image_paths[reasoning_image_idx]
+src/dataset/future_l1_dataset.py:319:                    reasoning_image_idx += 1
+src/dataset/future_l1_dataset.py:325:                logging.warning(f"An <image> tag was found in the GPT response, but there are not enough image paths in the 'reasoning_image' list.")
+src/dataset/future_l1_dataset.py:372:class FutureL1DataCollator:
+src/dataset/future_l1_dataset.py:557:def make_supervised_data_module(processor, args):
+src/dataset/future_l1_dataset.py:577:    data_collator = FutureL1DataCollator(

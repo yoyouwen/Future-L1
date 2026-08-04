@@ -236,8 +236,12 @@ def train():
         trainer.train()
 
     trainer.save_state()
-    
-    safe_save_model_for_hf_trainer(trainer, output_dir=training_args.output_dir)
+
+    skip_final_save = os.environ.get("FUTURE_L1_SKIP_FINAL_SAVE", "0").strip().lower()
+    if skip_final_save in {"1", "true", "yes", "on"}:
+        rank0_print("Skipping final full-model save (FUTURE_L1_SKIP_FINAL_SAVE=1).")
+    else:
+        safe_save_model_for_hf_trainer(trainer, output_dir=training_args.output_dir)
 
 
 
