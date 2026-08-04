@@ -226,11 +226,16 @@ def main() -> int:
             self.output_gate = nn.Parameter(torch.tensor(0.1))
 
         def forward(self, decoder_hidden, latent_memory):
-            query = self.query_projection(self.query_norm(decoder_hidden)).unsqueeze(1)
+            # Qwen emits bf16 hidden states while this lightweight adapter is
+            # intentionally trained in fp32. Make the boundary explicit before
+            # LayerNorm instead of relying on autocast (which this smoke does
+            # not enable).
+            decoder_hidden_fp32 = decoder_hidden.float()
+            query = self.query_projection(self.query_norm(decoder_hidden_fp32)).unsqueeze(1)
             keys = self.memory_projection(self.memory_norm(latent_memory))
             retrieved, attention = self.attention(query, keys, keys, need_weights=True)
             delta = self.output_projection(retrieved.squeeze(1))
-            fused = decoder_hidden.float() + self.output_gate.tanh() * delta
+            fused = decoder_hidden_fp32 + self.output_gate.tanh() * delta
             return fused, attention.squeeze(1)
 
     cross_attention_adapter = DecoderMemoryCrossAttention(qwen_dim, memory_dim).to(device)
